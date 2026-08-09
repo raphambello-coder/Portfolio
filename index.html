@@ -593,16 +593,26 @@ document.getElementById('sheetCancel').addEventListener('click', closeSheet);
 document.getElementById('sheetSave').addEventListener('click', saveSheet);
 document.getElementById('sheetOverlay').addEventListener('click', (e)=>{ if(e.target.id==='sheetOverlay') closeSheet(); });
 
-async function fetchBRPrices(){
-  const url = 'https://brapi.dev/api/v2/stocks/quote?symbols=' + TICKERS_BR.join(',') + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
+async function fetchOneBRPrice(ticker){
+  const url = 'https://brapi.dev/api/v2/stocks/quote?symbols=' + ticker + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
   const res = await fetch(url);
   if(!res.ok) throw new Error('brapi ' + res.status + (res.status===401 ? ' (precisa de token — cadastre grátis em brapi.dev)' : ''));
   const json = await res.json();
+  const r = (json.results||[])[0];
+  if(!r) return null;
+  return r.data ? r.data.regularMarketPrice : r.regularMarketPrice; // v2 aninha em "data"; mantem fallback pro formato antigo
+}
+
+async function fetchBRPrices(){
+  // plano gratuito da brapi so aceita 1 ativo por requisicao — busca cada um separado
+  const settled = await Promise.allSettled(TICKERS_BR.map(fetchOneBRPrice));
   const out = {};
-  (json.results||[]).forEach(r => {
-    const price = r.data ? r.data.regularMarketPrice : r.regularMarketPrice; // v2 aninha em "data"; mantem fallback pro formato antigo
-    if(price) out[r.symbol] = price;
+  const errs = [];
+  settled.forEach((s, i) => {
+    if(s.status==='fulfilled' && s.value) out[TICKERS_BR[i]] = s.value;
+    else if(s.status==='rejected') errs.push(TICKERS_BR[i]+': '+s.reason);
   });
+  if(Object.keys(out).length===0) throw new Error('brapi: ' + (errs[0]||'nenhuma cotação retornou'));
   return out;
 }
 
@@ -985,18 +995,20 @@ function qtyAtDate(rows, key, date, keyIdx, dateIdx, opIdx, qtdIdx){
   return q;
 }
 
-function nearestValue(series, date){
+function nearestValue(series, date, maxGapDays){
   if(!series || series.length===0) return null;
   let best = series[0], bestDiff = Math.abs(series[0][0]-date);
   for(const pt of series){
     const diff = Math.abs(pt[0]-date);
     if(diff < bestDiff){ best = pt; bestDiff = diff; }
   }
+  if(maxGapDays!=null && bestDiff > maxGapDays*24*60*60*1000) return null; // ponto mais proximo esta longe demais p/ confiar
   return best[1];
 }
 
 async function fetchHistBR(ticker){
-  const url = `https://brapi.dev/api/quote/${ticker}?range=5y&interval=1wk` + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
+  // plano gratuito da brapi só permite ranges: 1d, 5d, 1mo, 3mo — 3mo é o maior disponível
+  const url = `https://brapi.dev/api/quote/${ticker}?range=3mo&interval=1d` + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
   const res = await fetch(url);
   if(!res.ok) throw new Error('brapi hist '+res.status + (res.status===401 ? ' (precisa de token — cadastre grátis em brapi.dev)' : ''));
   const json = await res.json();
@@ -1067,7 +1079,7 @@ function portfolioReturnForWindow(months, ctx){
   let V0 = 0, V1 = 0, cfWeighted = 0, cfSum = 0, divRecebidos = 0, missingData = false;
 
   HIST_DATA.tickersHeldBR.forEach(t=>{
-    const priceStart = nearestValue(ctx.histBR[t], start);
+    const priceStart = nearestValue(ctx.histBR[t], start, 20);
     const priceNow = getPrice('br', t) || priceStart;
     const qtyStart = qtyAtDate(HIST_DATA.movBR, t, start, 0, 1, 2, 3);
     const qtyNow = qtyAtDate(HIST_DATA.movBR, t, end, 0, 1, 2, 3);
@@ -1117,7 +1129,7 @@ function portfolioReturnForWindow(months, ctx){
     if(d > start && d <= end) divRecebidos += usd*usdbrlNow;
   });
 
-  const btcPriceStart = nearestValue(ctx.histBTC, start);
+  const btcPriceStart = nearestValue(ctx.histBTC, start, 20);
   const btcPriceNow = getPrice('btc') || btcPriceStart;
   let qtyBtcStart = 0, qtyBtcNow = 0;
   HIST_DATA.movBTC.forEach(r=>{
