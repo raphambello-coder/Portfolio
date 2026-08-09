@@ -435,6 +435,20 @@ const TICKERS_BR = ['AZZA3','BBAS3','BBDC3','BRST3','KLBN11','LJQQ3','SLCE3','VA
 const TICKERS_US = ['VOO','QQQ','VNQ','IJS','NOBL','BLOK'];
 const CACHE_KEY = 'live-prices-cache';
 const CACHE_MAX_AGE_MS = 15 * 60 * 1000; // 15 min
+const BRAPI_TOKEN = ''; // brapi.dev agora exige token (gratuito) mesmo p/ cotações simples — cadastre em brapi.dev e cole aqui
+
+// stooq e frankfurter costumam bloquear fetch direto do navegador (CORS); tenta direto e, se falhar, via proxy publico
+async function fetchDirectOrProxied(url){
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('status ' + res.status);
+    return res;
+  }catch(e){
+    const res2 = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
+    if(!res2.ok) throw new Error('proxy status ' + res2.status);
+    return res2;
+  }
+}
 
 let LIVE = { br:{}, us:{}, btc:null, usdbrl:null, fetchedAt:null, ok:false };
 let MANUAL = { br:{}, us:{}, btc:null, usdbrl:null, savedAt:null };
@@ -569,9 +583,9 @@ document.getElementById('sheetSave').addEventListener('click', saveSheet);
 document.getElementById('sheetOverlay').addEventListener('click', (e)=>{ if(e.target.id==='sheetOverlay') closeSheet(); });
 
 async function fetchBRPrices(){
-  const url = 'https://brapi.dev/api/quote/' + TICKERS_BR.join(',');
+  const url = 'https://brapi.dev/api/quote/' + TICKERS_BR.join(',') + (BRAPI_TOKEN ? '?token='+BRAPI_TOKEN : '');
   const res = await fetch(url);
-  if(!res.ok) throw new Error('brapi ' + res.status);
+  if(!res.ok) throw new Error('brapi ' + res.status + (res.status===401 ? ' (precisa de token — cadastre grátis em brapi.dev)' : ''));
   const json = await res.json();
   const out = {};
   (json.results||[]).forEach(r => { if(r.regularMarketPrice) out[r.symbol] = r.regularMarketPrice; });
@@ -581,8 +595,7 @@ async function fetchBRPrices(){
 async function fetchUSPrices(){
   const syms = TICKERS_US.map(t=>t.toLowerCase()+'.us').join(',');
   const url = 'https://stooq.com/q/l/?s='+syms+'&f=sd2t2c&h&e=csv';
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('stooq ' + res.status);
+  const res = await fetchDirectOrProxied(url);
   const text = await res.text();
   const lines = text.trim().split('\n').slice(1);
   const out = {};
@@ -604,8 +617,7 @@ async function fetchBTCPrice(){
 }
 
 async function fetchUSDBRL(){
-  const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
-  if(!res.ok) throw new Error('frankfurter ' + res.status);
+  const res = await fetchDirectOrProxied('https://api.frankfurter.app/latest?from=USD&to=BRL');
   const json = await res.json();
   return json.rates.BRL;
 }
@@ -970,9 +982,9 @@ function nearestValue(series, date){
 }
 
 async function fetchHistBR(ticker){
-  const url = `https://brapi.dev/api/quote/${ticker}?range=5y&interval=1wk`;
+  const url = `https://brapi.dev/api/quote/${ticker}?range=5y&interval=1wk` + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
   const res = await fetch(url);
-  if(!res.ok) throw new Error('brapi hist '+res.status);
+  if(!res.ok) throw new Error('brapi hist '+res.status + (res.status===401 ? ' (precisa de token — cadastre grátis em brapi.dev)' : ''));
   const json = await res.json();
   const hp = json.results?.[0]?.historicalDataPrice || [];
   return hp.map(p => [new Date(p.date*1000), p.close]).filter(p=>p[1]);
@@ -980,8 +992,7 @@ async function fetchHistBR(ticker){
 
 async function fetchHistUS(ticker){
   const url = `https://stooq.com/q/d/l/?s=${ticker.toLowerCase()}.us&i=d`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('stooq hist '+res.status);
+  const res = await fetchDirectOrProxied(url);
   const text = await res.text();
   const lines = text.trim().split('\n').slice(1);
   return lines.map(l=>{
@@ -991,7 +1002,8 @@ async function fetchHistUS(ticker){
 }
 
 async function fetchHistBTC(){
-  const url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=brl&days=1825&interval=daily';
+  // a API pública gratuita da coingecko limita historico a 365 dias sem chave paga
+  const url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=brl&days=365&interval=daily';
   const res = await fetch(url);
   if(!res.ok) throw new Error('coingecko hist '+res.status);
   const json = await res.json();
@@ -1002,8 +1014,7 @@ async function fetchHistFX(){
   const end = new Date();
   const start = new Date(); start.setMonth(start.getMonth()-61);
   const url = `https://api.frankfurter.app/${toBRDate(start)}..${toBRDate(end)}?from=USD&to=BRL`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('frankfurter hist '+res.status);
+  const res = await fetchDirectOrProxied(url);
   const json = await res.json();
   return Object.entries(json.rates||{}).map(([d,v])=>[parseDateBR(d), v.BRL]).sort((a,b)=>a[0]-b[0]);
 }
@@ -1039,13 +1050,15 @@ function portfolioReturnForWindow(months, ctx){
   const start = new Date(); start.setMonth(start.getMonth()-months);
   const totalDays = daysBetween(start, end) || 1;
 
-  let V0 = 0, V1 = 0, cfWeighted = 0, cfSum = 0, divRecebidos = 0;
+  let V0 = 0, V1 = 0, cfWeighted = 0, cfSum = 0, divRecebidos = 0, missingData = false;
 
   HIST_DATA.tickersHeldBR.forEach(t=>{
     const priceStart = nearestValue(ctx.histBR[t], start);
     const priceNow = getPrice('br', t) || priceStart;
     const qtyStart = qtyAtDate(HIST_DATA.movBR, t, start, 0, 1, 2, 3);
     const qtyNow = qtyAtDate(HIST_DATA.movBR, t, end, 0, 1, 2, 3);
+    if(qtyStart>0 && !priceStart) missingData = true;
+    if(qtyNow>0 && !priceNow) missingData = true;
     if(priceStart) V0 += qtyStart * priceStart;
     if(priceNow) V1 += qtyNow * priceNow;
   });
@@ -1071,6 +1084,8 @@ function portfolioReturnForWindow(months, ctx){
     const priceNowUSD = getPrice('us', t) || priceStartUSD;
     const qtyStart = qtyAtDate(HIST_DATA.movUS, t, start, 0, 1, -1, 2);
     const qtyNow = qtyAtDate(HIST_DATA.movUS, t, end, 0, 1, -1, 2);
+    if(qtyStart>0 && !priceStartUSD) missingData = true;
+    if(qtyNow>0 && !priceNowUSD) missingData = true;
     if(priceStartUSD) V0 += qtyStart * priceStartUSD * fxStart;
     if(priceNowUSD) V1 += qtyNow * priceNowUSD * usdbrlNow;
   });
@@ -1101,9 +1116,12 @@ function portfolioReturnForWindow(months, ctx){
       cfSum += valorBRL; cfWeighted += valorBRL*w;
     }
   });
+  if(qtyBtcStart>0 && !btcPriceStart) missingData = true;
+  if(qtyBtcNow>0 && !btcPriceNow) missingData = true;
   if(btcPriceStart) V0 += qtyBtcStart * btcPriceStart;
   if(btcPriceNow) V1 += qtyBtcNow * btcPriceNow;
 
+  if(missingData) return null;
   const denom = V0 + cfWeighted;
   if(denom <= 0) return null;
   return (V1 + divRecebidos - V0 - cfSum) / denom * 100;
