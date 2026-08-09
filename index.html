@@ -198,6 +198,17 @@
     padding:1px 4px; margin-left:6px; vertical-align:middle;
   }
   .live-tag.on{ color:var(--sage); border-color:var(--sage); }
+  .live-dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--sage); margin-right:6px; vertical-align:middle;
+    animation:pulse 1.8s ease-in-out infinite;
+  }
+  .live-dot.off{ background:var(--rule); animation:none; }
+  @keyframes pulse{
+    0%{ opacity:1; box-shadow:0 0 0 0 rgba(169,208,174,0.5); }
+    70%{ opacity:0.55; box-shadow:0 0 0 5px rgba(169,208,174,0); }
+    100%{ opacity:1; box-shadow:0 0 0 0 rgba(169,208,174,0); }
+  }
 
   /* ---------- hero ---------- */
   .hero{
@@ -368,7 +379,7 @@
 <header class="top">
   <div class="brand">Extrato<span class="dot">·</span>Carteira</div>
   <button id="refreshBtn" class="refresh-btn">
-    <span id="refreshLabel">atualizar</span>
+    <span id="refreshLabel">atualizar agora</span>
   </button>
 </header>
 
@@ -503,7 +514,56 @@ async function saveSheet(){
   buildAll();
 }
 
-document.getElementById('refreshBtn').addEventListener('click', openSheet);
+const AUTO_REFRESH_MS = 60 * 1000; // busca cotações novas a cada 60s
+let autoRefreshTimer = null;
+let nextRefreshAt = null;
+
+function scheduleAutoRefresh(){
+  clearTimeout(autoRefreshTimer);
+  nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
+  autoRefreshTimer = setTimeout(async ()=>{
+    if(document.hidden){ nextRefreshAt = Date.now(); return; } // retoma ao voltar o foco
+    await loadLivePrices(true);
+    scheduleAutoRefresh();
+  }, AUTO_REFRESH_MS);
+}
+
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && nextRefreshAt && Date.now() >= nextRefreshAt){
+    loadLivePrices(true).then(scheduleAutoRefresh);
+  }
+});
+
+async function forceRefreshNow(){
+  const btn = document.getElementById('refreshBtn');
+  const label = document.getElementById('refreshLabel');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  label.textContent = 'atualizando…';
+  await loadLivePrices(true);
+  btn.classList.remove('loading');
+  btn.disabled = false;
+  label.textContent = 'atualizar agora';
+  scheduleAutoRefresh();
+}
+
+function startLiveClock(){
+  clearInterval(window.__liveClockInt);
+  window.__liveClockInt = setInterval(()=>{
+    const agoEl = document.getElementById('liveAgo');
+    if(agoEl && LIVE.fetchedAt){
+      const secs = Math.floor((Date.now()-LIVE.fetchedAt)/1000);
+      agoEl.textContent = secs<5 ? 'agora' : (secs<60 ? `há ${secs}s` : `há ${Math.floor(secs/60)}min`);
+    }
+    const nextEl = document.getElementById('nextRefreshIn');
+    if(nextEl && nextRefreshAt){
+      const rem = Math.max(0, Math.ceil((nextRefreshAt-Date.now())/1000));
+      nextEl.textContent = rem+'s';
+    }
+  }, 1000);
+}
+
+document.getElementById('refreshBtn').addEventListener('click', forceRefreshNow);
 document.getElementById('sheetCancel').addEventListener('click', closeSheet);
 document.getElementById('sheetSave').addEventListener('click', saveSheet);
 document.getElementById('sheetOverlay').addEventListener('click', (e)=>{ if(e.target.id==='sheetOverlay') closeSheet(); });
@@ -597,13 +657,15 @@ function finishLoad(ok){
   if(nUS>0) partes.push(nUS+'/6 EUA');
   if(LIVE.btc) partes.push('BTC');
   if(LIVE.usdbrl) partes.push('câmbio');
+  const dotClass = ok ? 'live-dot' : 'live-dot off';
   const okLine = partes.length
-    ? `Busca automática às ${hora} · ${partes.join(' · ')}`
-    : `Busca automática às ${hora} sem nenhuma fonte disponível`;
+    ? `<span class="${dotClass}"></span>Ao vivo · atualizado às ${hora} (<span id="liveAgo">agora</span>) · ${partes.join(' · ')}`
+    : `<span class="${dotClass}"></span>Busca automática às ${hora} sem nenhuma fonte disponível`;
   const errLines = (LIVE.errs||[]).map(e=>`<div style="color:var(--rust); margin-top:2px;">✕ ${e}</div>`).join('');
-  statusEl.innerHTML = `${okLine}${errLines}<span class="manual-link" id="openSheetLink" style="display:block; margin-top:6px;">Preencher/completar manualmente →</span>`;
+  statusEl.innerHTML = `${okLine}${errLines}<div style="margin-top:4px;">Atualiza sozinho a cada 60s (<span id="nextRefreshIn">60s</span>) · <span class="manual-link" id="openSheetLink">preencher/completar manualmente →</span></div>`;
   const link = document.getElementById('openSheetLink');
   if(link) link.addEventListener('click', openSheet);
+  startLiveClock();
   buildAll();
 }
 
@@ -1152,7 +1214,7 @@ function buildCdiPanel(){
 
 buildAll();
 loadManual().then(buildAll);
-loadLivePrices(false);
+loadLivePrices(false).then(scheduleAutoRefresh);
 buildCdiPanel();
 </script>
 </body>
