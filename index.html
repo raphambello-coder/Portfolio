@@ -435,7 +435,7 @@ const TICKERS_BR = ['AZZA3','BBAS3','BBDC3','BRST3','KLBN11','LJQQ3','SLCE3','VA
 const TICKERS_US = ['VOO','QQQ','VNQ','IJS','NOBL','BLOK'];
 const CACHE_KEY = 'live-prices-cache';
 const CACHE_MAX_AGE_MS = 15 * 60 * 1000; // 15 min
-const BRAPI_TOKEN = ''; // brapi.dev agora exige token (gratuito) mesmo p/ cotações simples — cadastre em brapi.dev e cole aqui
+const BRAPI_TOKEN = 'xAKc4dZC4Ab1zSXk2WBQSC'; // token gratuito brapi.dev (visível publicamente no código — plano free, sem risco de cobrança)
 
 // stooq e frankfurter costumam bloquear fetch direto do navegador (CORS); tenta direto e, se falhar, via proxy publico
 async function fetchDirectOrProxied(url){
@@ -583,12 +583,15 @@ document.getElementById('sheetSave').addEventListener('click', saveSheet);
 document.getElementById('sheetOverlay').addEventListener('click', (e)=>{ if(e.target.id==='sheetOverlay') closeSheet(); });
 
 async function fetchBRPrices(){
-  const url = 'https://brapi.dev/api/quote/' + TICKERS_BR.join(',') + (BRAPI_TOKEN ? '?token='+BRAPI_TOKEN : '');
+  const url = 'https://brapi.dev/api/v2/stocks/quote?symbols=' + TICKERS_BR.join(',') + (BRAPI_TOKEN ? '&token='+BRAPI_TOKEN : '');
   const res = await fetch(url);
   if(!res.ok) throw new Error('brapi ' + res.status + (res.status===401 ? ' (precisa de token — cadastre grátis em brapi.dev)' : ''));
   const json = await res.json();
   const out = {};
-  (json.results||[]).forEach(r => { if(r.regularMarketPrice) out[r.symbol] = r.regularMarketPrice; });
+  (json.results||[]).forEach(r => {
+    const price = r.data ? r.data.regularMarketPrice : r.regularMarketPrice; // v2 aninha em "data"; mantem fallback pro formato antigo
+    if(price) out[r.symbol] = price;
+  });
   return out;
 }
 
