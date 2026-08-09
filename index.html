@@ -438,15 +438,26 @@ const CACHE_MAX_AGE_MS = 15 * 60 * 1000; // 15 min
 const BRAPI_TOKEN = 'xAKc4dZC4Ab1zSXk2WBQSC'; // token gratuito brapi.dev (visível publicamente no código — plano free, sem risco de cobrança)
 
 // stooq e frankfurter costumam bloquear fetch direto do navegador (CORS); tenta direto e, se falhar, via proxy publico
+const CORS_PROXIES = [
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+  u => 'https://thingproxy.freeboard.io/fetch/' + u,
+];
 async function fetchDirectOrProxied(url){
   try{
     const res = await fetch(url);
     if(!res.ok) throw new Error('status ' + res.status);
     return res;
   }catch(e){
-    const res2 = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
-    if(!res2.ok) throw new Error('proxy status ' + res2.status);
-    return res2;
+    let lastErr = e;
+    for(const makeProxyUrl of CORS_PROXIES){
+      try{
+        const res = await fetch(makeProxyUrl(url));
+        if(!res.ok){ lastErr = new Error('proxy status '+res.status); continue; }
+        return res;
+      }catch(e2){ lastErr = e2; }
+    }
+    throw lastErr;
   }
 }
 
