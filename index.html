@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carteira">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<title>Carteira — Extrato</title>
+<style>
+  :root{
+    --ink:#000000;
+    --ink-2:#151A1B;
+    --ink-3:#1E2526;
+    --paper:#FFFFFF;
+    --paper-dim:#E4DFCF;
+    --gold:#F0BE55;
+    --gold-dim:#C79A3E;
+    --sage:#A9D0AE;
+    --rust:#EB8A68;
+    --rule:#4A5857;
+    --rule-soft:#2C3737;
+    --radius:2px;
+    --font-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%; background:#000000;}
+  body{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:var(--font-sans);
+    font-weight:500;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:64px;
+  }
+  ::selection{ background:var(--gold); color:var(--ink); }
+
+  .num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; letter-spacing:-0.01em; }
+  .serif{ font-family:var(--font-serif); }
+
+  a{ color:inherit; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ---------- header ---------- */
+  header.top{
+    padding:18px 20px 14px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--rule-soft);
+    position:sticky; top:0; z-index:50;
+    background:rgba(18,24,26,0.94);
+    backdrop-filter:blur(6px);
+  }
+  header.top .brand{
+    font-family:var(--font-serif);
+    font-weight:600;
+    font-size:17px;
+    letter-spacing:0.02em;
+  }
+  header.top .brand .dot{ color:var(--gold); }
+  header.top .meta{
+    font-size:10.5px;
+    color:var(--paper-dim);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  .refresh-btn{
+    background:none;
+    border:1px solid var(--rule);
+    color:var(--paper-dim);
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    padding:6px 11px;
+    border-radius:20px;
+  }
+  .refresh-btn.loading{ color:var(--gold); border-color:var(--gold-dim); }
+  .refresh-btn:active{ transform:scale(0.96); }
+  .quote-status{
+    margin-top:14px;
+    font-size:11.5px;
+    color:var(--paper-dim);
+  }
+  .manual-link{
+    color:var(--gold);
+    text-decoration:underline;
+    font-weight:600;
+  }
+
+  /* ---------- manual entry sheet ---------- */
+  .sheet-overlay{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.72);
+    z-index:100;
+    align-items:flex-end;
+  }
+  .sheet-overlay.open{ display:flex; }
+  .sheet{
+    background:var(--ink-2);
+    border-top:1px solid var(--rule);
+    width:100%;
+    max-height:88vh;
+    overflow-y:auto;
+    padding:18px 20px calc(24px + env(safe-area-inset-bottom));
+    border-radius:14px 14px 0 0;
+  }
+  .sheet h2{
+    font-family:var(--font-serif);
+    font-size:19px;
+    font-weight:600;
+    margin-bottom:4px;
+  }
+  .sheet .sheet-sub{ font-size:12px; color:var(--paper-dim); margin-bottom:18px; }
+  .sheet .grp-label{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--gold); font-weight:600; margin:16px 0 8px;
+  }
+  .sheet .field{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 0; border-bottom:1px solid var(--rule-soft);
+    gap:10px;
+  }
+  .sheet .field label{ font-size:13.5px; flex-shrink:0; }
+  .sheet .field .hint{ font-size:10.5px; color:var(--paper-dim); display:block; }
+  .sheet .field input{
+    background:var(--ink-3);
+    border:1px solid var(--rule);
+    color:var(--paper);
+    font-family:var(--font-mono);
+    font-size:14px;
+    padding:8px 10px;
+    border-radius:4px;
+    width:118px;
+    text-align:right;
+  }
+  .sheet .field input:focus{ outline:2px solid var(--gold); border-color:var(--gold); }
+  .sheet-actions{
+    display:flex; gap:10px; margin-top:20px;
+  }
+  .sheet-actions button{
+    flex:1;
+    padding:13px;
+    border-radius:8px;
+    font-size:13.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .btn-save{ background:var(--gold); color:var(--ink); border:none; }
+  .btn-cancel{ background:none; color:var(--paper-dim); border:1px solid var(--rule); }
+  .hero-return{
+    margin-top:10px;
+    font-size:16px;
+    font-family:var(--font-mono);
+  }
+  .toggle-return{
+    display:inline-flex;
+    border:1px solid var(--rule);
+    border-radius:20px;
+    overflow:hidden;
+    margin-bottom:16px;
+  }
+  .toggle-return button{
+    background:none; border:none;
+    color:var(--paper-dim);
+    font-size:11px; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.05em;
+    padding:7px 13px;
+  }
+  .toggle-return button.active{ background:var(--gold); color:var(--ink); }
+  .ledger .row .amt3{ font-size:11px; margin-top:1px; }
+  .live-tag{
+    font-size:9px; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--paper-dim); border:1px solid var(--rule); border-radius:3px;
+    padding:1px 4px; margin-left:6px; vertical-align:middle;
+  }
+  .live-tag.on{ color:var(--sage); border-color:var(--sage); }
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding:34px 20px 22px;
+    border-bottom:1px solid var(--rule-soft);
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .hero .eyebrow{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.14em;
+    color:var(--gold);
+    font-weight:600;
+    margin-bottom:10px;
+  }
+  .hero .figure{
+    font-size:44px;
+    line-height:1.02;
+    font-weight:500;
+    letter-spacing:-0.02em;
+  }
+  .hero .figure .cents{ color:var(--paper-dim); font-size:0.55em; }
+  .hero .sub{
+    margin-top:14px;
+    display:flex;
+    gap:22px;
+    flex-wrap:wrap;
+    font-size:12.5px;
+  }
+  .hero .sub .item .k{ color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.06em; font-size:10px; display:block; margin-bottom:3px;}
+  .hero .sub .item .v{ font-size:15px; }
+  .pos{ color:var(--sage); }
+  .neg{ color:var(--rust); }
+
+  /* ---------- tabs ---------- */
+  nav.tabs{
+    display:flex;
+    overflow-x:auto;
+    -ms-overflow-style:none; scrollbar-width:none;
+    border-bottom:1px solid var(--rule-soft);
+    position:sticky; top:57px; z-index:40;
+    background:var(--ink);
+  }
+  nav.tabs::-webkit-scrollbar{ display:none; }
+  nav.tabs button{
+    flex:0 0 auto;
+    background:none; border:none; color:var(--paper-dim);
+    font-size:12.5px; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.06em;
+    padding:13px 16px 11px;
+    border-bottom:2px solid transparent;
+    white-space:nowrap;
+  }
+  nav.tabs button.active{ color:var(--paper); border-bottom-color:var(--gold); }
+
+  /* ---------- sections ---------- */
+  section.panel{ display:none; padding:22px 20px 8px; background:var(--ink); color:var(--paper); }
+  section.panel.active{ display:block; }
+
+  .block-title{
+    font-family:var(--font-serif);
+    font-size:19px;
+    font-weight:600;
+    margin-bottom:4px;
+  }
+  .block-sub{
+    font-size:12px;
+    color:var(--paper-dim);
+    margin-bottom:18px;
+  }
+
+  .ledger{ border-top:1px solid var(--rule); }
+  .ledger .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:13px 0;
+    border-bottom:1px solid var(--rule-soft);
+    gap:12px;
+  }
+  .ledger .row .left{ min-width:0; }
+  .ledger .row .tkr{ font-weight:600; font-size:14.5px; }
+  .ledger .row .desc{ font-size:11.5px; color:var(--paper-dim); margin-top:2px; }
+  .ledger .row .right{ text-align:right; flex-shrink:0; }
+  .ledger .row .amt{ font-size:14.5px; }
+  .ledger .row .amt2{ font-size:11px; color:var(--paper-dim); margin-top:2px; }
+
+  .ledger .row.total{
+    border-bottom:none;
+    border-top:1px solid var(--rule);
+    margin-top:2px;
+    padding-top:14px;
+  }
+  .ledger .row.total .tkr{ font-family:var(--font-serif); font-weight:600; }
+  .ledger .row.total .amt{ font-size:17px; }
+
+  .card{
+    background:var(--ink-2);
+    border:1px solid var(--rule-soft);
+    border-radius:var(--radius);
+    padding:16px 16px;
+    margin-bottom:14px;
+  }
+  .card .row-line{ display:flex; justify-content:space-between; font-size:13px; padding:5px 0; }
+  .card .row-line .k{ color:var(--paper-dim); }
+
+  .note{
+    font-size:11.5px;
+    color:var(--paper-dim);
+    line-height:1.5;
+    padding:12px 14px;
+    background:var(--ink-3);
+    border-left:2px solid var(--gold-dim);
+    margin:14px 0 20px;
+  }
+
+  .divider-label{
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--gold);
+    font-weight:600;
+    margin:26px 0 8px;
+  }
+
+  .stamp{
+    display:inline-block;
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.06em;
+    border:1px solid var(--rule);
+    color:var(--paper-dim);
+    padding:2px 6px;
+    border-radius:2px;
+    text-transform:uppercase;
+  }
+
+  details.tickerlist summary{
+    list-style:none; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:2px 0 10px;
+    font-size:12px; color:var(--gold);
+    text-transform:uppercase; letter-spacing:0.06em; font-weight:600;
+  }
+  details.tickerlist summary::-webkit-details-marker{ display:none; }
+  details.tickerlist summary .chev{ transition:transform .2s; }
+  details.tickerlist[open] summary .chev{ transform:rotate(180deg); }
+
+  footer.foot{
+    padding:26px 20px 40px;
+    font-size:11px;
+    color:var(--paper-dim);
+    line-height:1.6;
+    background:var(--ink);
+  }
+
+  @media (min-width:640px){
+    .hero .figure{ font-size:56px; }
+    section.panel{ padding-left:32px; padding-right:32px; max-width:720px; margin:0 auto; }
+    header.top, .hero, nav.tabs{ padding-left:32px; padding-right:32px; }
+    nav.tabs{ max-width:720px; margin:0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">Extrato<span class="dot">·</span>Carteira</div>
+  <button id="refreshBtn" class="refresh-btn">
+    <span id="refreshLabel">atualizar</span>
+  </button>
+</header>
+
+<div class="hero">
+  <div class="eyebrow" id="heroEyebrow">Patrimônio (carregando cotações…)</div>
+  <div class="figure num" id="heroTotal">R$ 0<span class="cents">,00</span></div>
+  <div class="hero-return" id="heroReturn"></div>
+  <div class="sub" id="heroSub"></div>
+  <div class="quote-status" id="quoteStatus">Buscando cotações ao vivo…</div>
+</div>
+
+<div class="sheet-overlay" id="sheetOverlay">
+  <div class="sheet">
+    <h2>Cotações de hoje</h2>
+    <div class="sheet-sub">Preencha o que tiver à mão — o resto continua usando o último valor salvo. Leva menos de 1 minuto.</div>
+    <div id="sheetFields"></div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="sheetCancel">Cancelar</button>
+      <button class="btn-save" id="sheetSave">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs">
+  <button data-panel="geral" class="active">Visão geral</button>
+  <button data-panel="acoes">Ações &amp; FIIs</button>
+  <button data-panel="etfs">ETFs (EUA)</button>
+  <button data-panel="cripto">Bitcoin</button>
+  <button data-panel="fixa">Renda fixa</button>
+</nav>
+
+<section class="panel active" id="panel-geral"></section>
+<section class="panel" id="panel-acoes"></section>
+<section class="panel" id="panel-etfs"></section>
+<section class="panel" id="panel-cripto"></section>
+<section class="panel" id="panel-fixa"></section>
+
+<footer class="foot">
+  Valores de custo/aporte, ganhos realizados e proventos são fixos e vêm do seu histórico de movimentações.
+  Cotações de mercado ao vivo ainda não estão conectadas nesta versão — próxima etapa.
+  <br><br>Câmbio de referência usado nesta tela para converter USD→BRL: R$ 5,20 (aproximado, apenas para o total consolidado — os valores em USD ficam sempre visíveis separadamente).
+</footer>
+
+<script>
+const PORTFOLIO_DATA = {"atualizadoEm": "2026-08-08", "acoesFiis": {"posicoes": [{"Ticker": "AZZA3", "Quantidade": 698, "PreçoMédio": 27.44, "CustoTotal": 19155.4}, {"Ticker": "BBAS3", "Quantidade": 760, "PreçoMédio": 24.49, "CustoTotal": 18611.89}, {"Ticker": "BBDC3", "Quantidade": 1307, "PreçoMédio": 12.81, "CustoTotal": 16741.53}, {"Ticker": "BRST3", "Quantidade": 2700, "PreçoMédio": 2.81, "CustoTotal": 7587.0}, {"Ticker": "KLBN11", "Quantidade": 225, "PreçoMédio": 17.17, "CustoTotal": 3863.5}, {"Ticker": "LJQQ3", "Quantidade": 7219, "PreçoMédio": 3.22, "CustoTotal": 23233.95}, {"Ticker": "SLCE3", "Quantidade": 963, "PreçoMédio": 18.08, "CustoTotal": 17407.72}, {"Ticker": "VAMO3", "Quantidade": 4850, "PreçoMédio": 4.71, "CustoTotal": 22846.5}], "custoTotal": 129447.49, "fmpEletrobras": {"Ativo": "XP FMP-FGTS Eletrobrás", "Tipo": "Fundo Mútuo de Privatização (FGTS)", "CNPJ": "45.088.790/0001-47", "DataAporte": "2022-06-14", "ValorAportado": 1533.45, "ValorEstimadoAtual": 2821.55, "DataReferenciaValorAtual": "2026-05-31", "RetornoAcumulado_%": 84.0, "MetodoAtualizacao": "Rentabilidade mensal divulgada pela XP (sem cotação diária pública)", "TaxaAdministracao_%aa": 0.2, "AtivoSubjacente": "ELET3 (Eletrobras ON)"}, "dividendos": [{"Ticker": "BBAS3", "ValorRecebido": 2170.133866}, {"Ticker": "SLCE3", "ValorRecebido": 1697.709556}, {"Ticker": "TGMA3", "ValorRecebido": 1338.0}, {"Ticker": "AZZA3", "ValorRecebido": 1240.075136}, {"Ticker": "SAPR11", "ValorRecebido": 781.0188430000001}, {"Ticker": "TAEE11", "ValorRecebido": 771.4716}, {"Ticker": "LJQQ3", "ValorRecebido": 730.232084}, {"Ticker": "BBDC3", "ValorRecebido": 691.581406}, {"Ticker": "VAMO3", "ValorRecebido": 682.4046999999999}, {"Ticker": "FIQE3", "ValorRecebido": 521.0938}, {"Ticker": "EGIE3", "ValorRecebido": 481.733442}, {"Ticker": "FLRY3", "ValorRecebido": 382.249024}, {"Ticker": "CEAB3", "ValorRecebido": 373.98973500000005}, {"Ticker": "ITSA4", "ValorRecebido": 249.665633}, {"Ticker": "WIZC3", "ValorRecebido": 229.199386}, {"Ticker": "ENBR3", "ValorRecebido": 227.66306100000003}, {"Ticker": "TASA4", "ValorRecebido": 223.954656}, {"Ticker": "VALE3", "ValorRecebido": 188.864622}, {"Ticker": "VIVT3", "ValorRecebido": 186.510925}, {"Ticker": "MDIA3", "ValorRecebido": 183.43788100000003}, {"Ticker": "KNRI11", "ValorRecebido": 152.8}, {"Ticker": "RDOR3", "ValorRecebido": 140.308797}, {"Ticker": "HGBS11", "ValorRecebido": 135.53}, {"Ticker": "VISC11", "ValorRecebido": 119.38}, {"Ticker": "BBSE3", "ValorRecebido": 115.211203}, {"Ticker": "ITUB4", "ValorRecebido": 111.2248}, {"Ticker": "BRST3", "ValorRecebido": 110.9565}, {"Ticker": "PSSA3", "ValorRecebido": 102.532826}, {"Ticker": "RECT11", "ValorRecebido": 102.24}, {"Ticker": "ALUP11", "ValorRecebido": 96.48}, {"Ticker": "TUPY3", "ValorRecebido": 48.909258}, {"Ticker": "SOJA3", "ValorRecebido": 47.038004}, {"Ticker": "RANI3", "ValorRecebido": 43.52102}, {"Ticker": "RADL3", "ValorRecebido": 25.420905}, {"Ticker": "EZTC3", "ValorRecebido": 25.327861}, {"Ticker": "VIVA3", "ValorRecebido": 17.073314}, {"Ticker": "BTLG11", "ValorRecebido": 13.0}, {"Ticker": "MGLU3", "ValorRecebido": 2.54444}, {"Ticker": "KROT3", "ValorRecebido": 0.23058}, {"Ticker": "USIM5", "ValorRecebido": 0.045296}], "totalDividendos": 14760.76, "lucroRealizado": [{"Ticker": "SAPR11", "PosiçãoAtual": 0, "CustoVendido": 20709.69, "ReceitaVenda": 27976.32, "LucroRealizado": 7266.630000000001, "Retorno%": 35.088067469865564}, {"Ticker": "CEAB3", "PosiçãoAtual": 0, "CustoVendido": 12327.85, "ReceitaVenda": 18167.25, "LucroRealizado": 5839.4, "Retorno%": 47.367545841326745}, {"Ticker": "FIQE3", "PosiçãoAtual": 0, "CustoVendido": 13223.0, "ReceitaVenda": 17456.0, "LucroRealizado": 4233.0, "Retorno%": 32.01240263177797}, {"Ticker": "AMBP3", "PosiçãoAtual": 0, "CustoVendido": 12588.03, "ReceitaVenda": 15752.91, "LucroRealizado": 3164.880000000001, "Retorno%": 25.141980119208498}, {"Ticker": "TGMA3", "PosiçãoAtual": 0, "CustoVendido": 11793.78, "ReceitaVenda": 14912.64, "LucroRealizado": 3118.8600000000024, "Retorno%": 26.444956578806817}, {"Ticker": "TAEE11", "PosiçãoAtual": 0, "CustoVendido": 3142.0, "ReceitaVenda": 4291.74, "LucroRealizado": 1149.7399999999998, "Retorno%": 36.59261616804582}, {"Ticker": "BBSE3", "PosiçãoAtual": 0, "CustoVendido": 4651.65, "ReceitaVenda": 5702.91, "LucroRealizado": 1051.2600000000002, "Retorno%": 22.59972267904937}, {"Ticker": "MDIA3", "PosiçãoAtual": 0, "CustoVendido": 2484.5199999999995, "ReceitaVenda": 3528.0, "LucroRealizado": 1043.4800000000005, "Retorno%": 41.99925941429333}, {"Ticker": "VIVA3", "PosiçãoAtual": 0, "CustoVendido": 1012.85, "ReceitaVenda": 1679.31, "LucroRealizado": 666.4599999999999, "Retorno%": 65.80046403712296}, {"Ticker": "AMOB3", "PosiçãoAtual": 0, "CustoVendido": 0.0, "ReceitaVenda": 652.59, "LucroRealizado": 652.59, "Retorno%": NaN}, {"Ticker": "SOJA3", "PosiçãoAtual": 0, "CustoVendido": 2585.86, "ReceitaVenda": 3188.88, "LucroRealizado": 603.02, "Retorno%": 23.31990130942897}, {"Ticker": "ENBR3", "PosiçãoAtual": 0, "CustoVendido": 2350.75, "ReceitaVenda": 2785.8, "LucroRealizado": 435.0500000000002, "Retorno%": 18.506859512921416}, {"Ticker": "ALUP11", "PosiçãoAtual": 0, "CustoVendido": 2699.44, "ReceitaVenda": 3125.02, "LucroRealizado": 425.5799999999999, "Retorno%": 15.765492102065611}, {"Ticker": "PSSA3", "PosiçãoAtual": 0, "CustoVendido": 1491.1999999999998, "ReceitaVenda": 1908.08, "LucroRealizado": 416.8800000000001, "Retorno%": 27.956008583691}, {"Ticker": "RANI3", "PosiçãoAtual": 0, "CustoVendido": 3240.26, "ReceitaVenda": 3578.88, "LucroRealizado": 338.61999999999944, "Retorno%": 10.450395955880063}, {"Ticker": "MGLU3", "PosiçãoAtual": 0, "CustoVendido": 174.45, "ReceitaVenda": 435.0, "LucroRealizado": 260.55, "Retorno%": 149.35511607910578}, {"Ticker": "EGIE3", "PosiçãoAtual": 0, "CustoVendido": 6256.4400000000005, "ReceitaVenda": 6465.6, "LucroRealizado": 209.15999999999983, "Retorno%": 3.343115254042232}, {"Ticker": "ITUB4", "PosiçãoAtual": 0, "CustoVendido": 2745.0, "ReceitaVenda": 2888.0, "LucroRealizado": 143.0, "Retorno%": 5.209471766848816}, {"Ticker": "RADL3", "PosiçãoAtual": 0, "CustoVendido": 970.15, "ReceitaVenda": 1094.85, "LucroRealizado": 124.69999999999992, "Retorno%": 12.853682420244288}, {"Ticker": "KNRI11", "PosiçãoAtual": 0, "CustoVendido": 1154.0, "ReceitaVenda": 1255.52, "LucroRealizado": 101.51999999999998, "Retorno%": 8.797227036395146}, {"Ticker": "HGBS11", "PosiçãoAtual": 0, "CustoVendido": 960.6, "ReceitaVenda": 1049.5, "LucroRealizado": 88.89999999999998, "Retorno%": 9.254632521340826}, {"Ticker": "XPBR31", "PosiçãoAtual": 0, "CustoVendido": 181.36, "ReceitaVenda": 248.98, "LucroRealizado": 67.61999999999998, "Retorno%": 37.284958094397865}, {"Ticker": "BTLG11", "PosiçãoAtual": 0, "CustoVendido": 527.0, "ReceitaVenda": 562.25, "LucroRealizado": 35.25, "Retorno%": 6.688804554079697}, {"Ticker": "VISC11", "PosiçãoAtual": 0, "CustoVendido": 763.9499999999999, "ReceitaVenda": 792.82, "LucroRealizado": 28.87000000000012, "Retorno%": 3.779043131094983}, {"Ticker": "ODPV3", "PosiçãoAtual": 0, "CustoVendido": 551.5400000000001, "ReceitaVenda": 561.0, "LucroRealizado": 9.459999999999924, "Retorno%": 1.7151974471479714}, {"Ticker": "GFSA3", "PosiçãoAtual": 0, "CustoVendido": 34.4, "ReceitaVenda": 41.45, "LucroRealizado": 7.049999999999997, "Retorno%": 20.49418604651162}, {"Ticker": "BRDT3", "PosiçãoAtual": 0, "CustoVendido": 80.16, "ReceitaVenda": 82.59, "LucroRealizado": 2.430000000000007, "Retorno%": 3.0314371257485115}, {"Ticker": "USIM5", "PosiçãoAtual": 0, "CustoVendido": 35.0, "ReceitaVenda": 36.88, "LucroRealizado": 1.8800000000000023, "Retorno%": 5.371428571428579}, {"Ticker": "PETR4", "PosiçãoAtual": 0, "CustoVendido": 53.78, "ReceitaVenda": 55.34, "LucroRealizado": 1.5600000000000025, "Retorno%": 2.9007065823726337}, {"Ticker": "KROT3", "PosiçãoAtual": 0, "CustoVendido": 71.76, "ReceitaVenda": 72.84, "LucroRealizado": 1.0799999999999983, "Retorno%": 1.5050167224080242}, {"Ticker": "PTNT4", "PosiçãoAtual": 0, "CustoVendido": 496.0, "ReceitaVenda": 497.0, "LucroRealizado": 1.0, "Retorno%": 0.2016129032258064}, {"Ticker": "CIEL3", "PosiçãoAtual": 0, "CustoVendido": 36.5, "ReceitaVenda": 36.6, "LucroRealizado": 0.1000000000000014, "Retorno%": 0.2739726027397299}, {"Ticker": "OIBR3", "PosiçãoAtual": 0, "CustoVendido": 107.0, "ReceitaVenda": 98.0, "LucroRealizado": -9.0, "Retorno%": -8.411214953271028}, {"Ticker": "ITSA4", "PosiçãoAtual": 0, "CustoVendido": 2270.47, "ReceitaVenda": 2178.54, "LucroRealizado": -91.92999999999984, "Retorno%": -4.048941408607021}, {"Ticker": "VIVT3", "PosiçãoAtual": 0, "CustoVendido": 5486.05, "ReceitaVenda": 5334.0, "LucroRealizado": -152.05000000000018, "Retorno%": -2.77157517703995}, {"Ticker": "WIZC3", "PosiçãoAtual": 0, "CustoVendido": 2464.39, "ReceitaVenda": 2293.83, "LucroRealizado": -170.55999999999997, "Retorno%": -6.920982474364851}, {"Ticker": "RECT11", "PosiçãoAtual": 0, "CustoVendido": 565.14, "ReceitaVenda": 292.62, "LucroRealizado": -272.52, "Retorno%": -48.221679583819935}, {"Ticker": "FLRY3", "PosiçãoAtual": 0, "CustoVendido": 6889.34, "ReceitaVenda": 6230.08, "LucroRealizado": -659.2600000000002, "Retorno%": -9.569276592532814}, {"Ticker": "RDOR3", "PosiçãoAtual": 0, "CustoVendido": 8231.449996000001, "ReceitaVenda": 7162.3799954, "LucroRealizado": -1069.0700006000015, "Retorno%": -12.987626737932034}, {"Ticker": "VALE3", "PosiçãoAtual": 0, "CustoVendido": 12822.349999999997, "ReceitaVenda": 11450.0, "LucroRealizado": -1372.3499999999967, "Retorno%": -10.702796289291722}, {"Ticker": "EZTC3", "PosiçãoAtual": 0, "CustoVendido": 6162.450000000001, "ReceitaVenda": 4663.26, "LucroRealizado": -1499.1900000000005, "Retorno%": -24.327824160845125}, {"Ticker": "TASA4", "PosiçãoAtual": 0, "CustoVendido": 6259.46, "ReceitaVenda": 2221.59, "LucroRealizado": -4037.87, "Retorno%": -64.50828026698788}, {"Ticker": "TUPY3", "PosiçãoAtual": 0, "CustoVendido": 9054.559999999998, "ReceitaVenda": 4084.8, "LucroRealizado": -4969.7599999999975, "Retorno%": -54.88681945892455}], "totalLucroRealizado": 17186.02, "totalCustoVendido": 169705.63}, "etfs": {"posicoes": [{"Ativo": "VOO", "Quantidade": 8.49927, "CustoUSD": 4191.5796622, "CustoBRL": 22989.14884789841, "PreçoMedioUSD": 493.16937362855873}, {"Ativo": "QQQ", "Quantidade": 3.36149, "CustoUSD": 1408.3888315, "CustoBRL": 7789.985946455879, "PreçoMedioUSD": 418.97754611794176}, {"Ativo": "VNQ", "Quantidade": 6.919029999999999, "CustoUSD": 653.8697597, "CustoBRL": 3375.43064201866, "PreçoMedioUSD": 94.50309648895872}, {"Ativo": "IJS", "Quantidade": 5.04646, "CustoUSD": 508.8140572, "CustoBRL": 2677.2962162728, "PreçoMedioUSD": 100.82593683492983}, {"Ativo": "NOBL", "Quantidade": 5.28473, "CustoUSD": 486.8840751, "CustoBRL": 2481.3012079887903, "PreçoMedioUSD": 92.130359564254}, {"Ativo": "BLOK", "Quantidade": 11.25317, "CustoUSD": 410.3758388, "CustoBRL": 2251.01500385792, "PreçoMedioUSD": 36.46757658508669}], "custoTotalBRL": 41564.18, "custoTotalUSD": 7659.91, "dividendos": [{"Ativo": "VOO", "USD_recebido": 144.987806033}, {"Ativo": "VNQ", "USD_recebido": 98.555724305}, {"Ativo": "BLOK", "USD_recebido": 67.4617188077}, {"Ativo": "IJS", "USD_recebido": 38.5264171764}, {"Ativo": "QQQ", "USD_recebido": 25.9012263108}, {"Ativo": "NOBL", "USD_recebido": 22.9099709336}], "totalDividendosUSD": 398.34}, "bitcoin": {"quantidade": 0.222489, "custoTotalBRL": 65452.79, "precoMedioBRL": 294184.39}, "rendaFixa": {"titulos": [{"Data da Aplicação": "2024-04-24", "Ativo": "Tesouro IPCA+ 2045", "Emissor": "Tesouro Nacional", "Quantidade de Títulos": 8.1, "Valor Aplicado": 10104.66, "Taxa": "IPCA + 6,04%", "Data de Vencimento": "2045-05-15", "Saldo Bruto Atual": 9729.8, "rent%": -3.70977351043974}, {"Data da Aplicação": "2025-03-31", "Ativo": "Tesouro IPCA+ 2029", "Emissor": "Tesouro Nacional", "Quantidade de Títulos": 1.14, "Valor Aplicado": 3730.58, "Taxa": "IPCA + 7,95%", "Data de Vencimento": "2029-05-15", "Saldo Bruto Atual": 4328.67, "rent%": 16.03209152464229}, {"Data da Aplicação": "2025-01-23", "Ativo": "LCA", "Emissor": "Bradesco", "Quantidade de Títulos": 500000.0, "Valor Aplicado": 5000.0, "Taxa": "0.1491", "Data de Vencimento": "2027-01-18", "Saldo Bruto Atual": 6169.49, "rent%": 23.3898}, {"Data da Aplicação": "2026-01-07", "Ativo": "LCI", "Emissor": "Bradesco", "Quantidade de Títulos": 1000000.0, "Valor Aplicado": 10000.0, "Taxa": "94,01% do CDI", "Data de Vencimento": "2029-12-22", "Saldo Bruto Atual": 10741.58, "rent%": 7.415799999999995}, {"Data da Aplicação": "2026-03-03", "Ativo": "LCI", "Emissor": "Bradesco", "Quantidade de Títulos": 2600000.0, "Valor Aplicado": 26000.0, "Taxa": "94,01% do CDI", "Data de Vencimento": "2030-02-15", "Saldo Bruto Atual": 27397.78, "rent%": 5.376076923076911}, {"Data da Aplicação": "2026-06-15", "Ativo": "LCI", "Emissor": "Bradesco", "Quantidade de Títulos": 1600000.0, "Valor Aplicado": 16000.0, "Taxa": "90,51% do CDI", "Data de Vencimento": "2030-05-30", "Saldo Bruto Atual": 16261.07, "rent%": 1.6316875000000008}, {"Data da Aplicação": "2026-08-02", "Ativo": "Caixinha (RDB)", "Emissor": "Nubank Ultravioleta", "Quantidade de Títulos": NaN, "Valor Aplicado": 10000.0, "Taxa": "120% do CDI", "Data de Vencimento": NaN, "Saldo Bruto Atual": 10000.0, "rent%": 0.0}], "totalAplicado": 80835.24, "totalSaldoAtual": 84628.39, "previdencia": {"Fundo": "Itaú High Yield II Prev XP Seguros", "Tipo": "PGBL", "CNPJ": "49.227.982/0001-48", "Seguradora": "XP Seguros", "Gestora": "Itaú Unibanco Asset", "TaxaAdministracao_%aa": 0.6, "TotalAportado": 23096.72, "SaldoAtual": 26868.3, "DataReferenciaSaldo": "2026-08-02", "RegimeTributacao": "Regressivo"}}};
+</script>
+<script>
+const FX_APPROX = 5.20; // cambio aproximado, usado so como ultimo fallback se a API de cambio falhar
+const TICKERS_BR = ['AZZA3','BBAS3','BBDC3','BRST3','KLBN11','LJQQ3','SLCE3','VAMO3'];
+const TICKERS_US = ['VOO','QQQ','VNQ','IJS','NOBL','BLOK'];
+const CACHE_KEY = 'live-prices-cache';
+const CACHE_MAX_AGE_MS = 15 * 60 * 1000; // 15 min
+
+let LIVE = { br:{}, us:{}, btc:null, usdbrl:null, fetchedAt:null, ok:false };
+let MANUAL = { br:{}, us:{}, btc:null, usdbrl:null, savedAt:null };
+let RETURN_MODE = 'total'; // 'total' | 'price'
+const MANUAL_KEY = 'manual-prices';
+
+function getPrice(kind, key){
+  if(kind==='br') return LIVE.br[key] || (MANUAL.br||{})[key] || null;
+  if(kind==='us') return LIVE.us[key] || (MANUAL.us||{})[key] || null;
+  if(kind==='btc') return LIVE.btc || MANUAL.btc || null;
+  if(kind==='usdbrl') return LIVE.usdbrl || MANUAL.usdbrl || null;
+}
+function priceIsLive(kind, key){
+  if(kind==='br') return !!LIVE.br[key];
+  if(kind==='us') return !!LIVE.us[key];
+  if(kind==='btc') return !!LIVE.btc;
+  if(kind==='usdbrl') return !!LIVE.usdbrl;
+}
+function hasAnyPrice(){
+  return Object.keys(LIVE.br||{}).length>0 || Object.keys(MANUAL.br||{}).length>0
+    || Object.keys(LIVE.us||{}).length>0 || Object.keys(MANUAL.us||{}).length>0
+    || !!LIVE.btc || !!MANUAL.btc;
+}
+
+async function loadManual(){
+  try{
+    const r = await window.storage.get(MANUAL_KEY, false);
+    if(r && r.value) MANUAL = JSON.parse(r.value);
+  }catch(e){ /* nada salvo ainda */ }
+}
+async function saveManual(){
+  MANUAL.savedAt = Date.now();
+  try{ await window.storage.set(MANUAL_KEY, JSON.stringify(MANUAL), false); }
+  catch(e){ alert('Não consegui salvar (armazenamento indisponível). Tenta de novo.'); }
+}
+
+function openSheet(){
+  const wrap = document.getElementById('sheetFields');
+  const rowsBR = TICKERS_BR.map(t => `
+    <div class="field">
+      <label>${t}<span class="hint">R$ / cota</span></label>
+      <input type="number" inputmode="decimal" step="0.01" id="m_br_${t}" value="${(MANUAL.br||{})[t] ?? ''}" placeholder="0,00">
+    </div>`).join('');
+  const rowsUS = TICKERS_US.map(t => `
+    <div class="field">
+      <label>${t}<span class="hint">US$ / cota</span></label>
+      <input type="number" inputmode="decimal" step="0.01" id="m_us_${t}" value="${(MANUAL.us||{})[t] ?? ''}" placeholder="0.00">
+    </div>`).join('');
+  wrap.innerHTML = `
+    <div class="grp-label">Ações &amp; FIIs (B3)</div>${rowsBR}
+    <div class="grp-label">ETFs (EUA)</div>${rowsUS}
+    <div class="grp-label">Outros</div>
+    <div class="field"><label>Bitcoin<span class="hint">R$ / BTC</span></label><input type="number" inputmode="decimal" step="0.01" id="m_btc" value="${MANUAL.btc ?? ''}" placeholder="0,00"></div>
+    <div class="field"><label>Câmbio<span class="hint">R$ por US$ 1</span></label><input type="number" inputmode="decimal" step="0.0001" id="m_usdbrl" value="${MANUAL.usdbrl ?? ''}" placeholder="5,20"></div>
+  `;
+  document.getElementById('sheetOverlay').classList.add('open');
+}
+function closeSheet(){ document.getElementById('sheetOverlay').classList.remove('open'); }
+
+async function saveSheet(){
+  const newManual = { br:{}, us:{}, btc:null, usdbrl:null };
+  TICKERS_BR.forEach(t=>{
+    const v = parseFloat(document.getElementById('m_br_'+t).value);
+    if(!isNaN(v) && v>0) newManual.br[t] = v;
+  });
+  TICKERS_US.forEach(t=>{
+    const v = parseFloat(document.getElementById('m_us_'+t).value);
+    if(!isNaN(v) && v>0) newManual.us[t] = v;
+  });
+  const btc = parseFloat(document.getElementById('m_btc').value);
+  if(!isNaN(btc) && btc>0) newManual.btc = btc;
+  const fx = parseFloat(document.getElementById('m_usdbrl').value);
+  if(!isNaN(fx) && fx>0) newManual.usdbrl = fx;
+  MANUAL = newManual;
+  await saveManual();
+  closeSheet();
+  buildAll();
+}
+
+document.getElementById('refreshBtn').addEventListener('click', openSheet);
+document.getElementById('sheetCancel').addEventListener('click', closeSheet);
+document.getElementById('sheetSave').addEventListener('click', saveSheet);
+document.getElementById('sheetOverlay').addEventListener('click', (e)=>{ if(e.target.id==='sheetOverlay') closeSheet(); });
+
+async function fetchBRPrices(){
+  const url = 'https://brapi.dev/api/quote/' + TICKERS_BR.join(',');
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('brapi ' + res.status);
+  const json = await res.json();
+  const out = {};
+  (json.results||[]).forEach(r => { if(r.regularMarketPrice) out[r.symbol] = r.regularMarketPrice; });
+  return out;
+}
+
+async function fetchUSPrices(){
+  const syms = TICKERS_US.map(t=>t.toLowerCase()+'.us').join(',');
+  const url = 'https://stooq.com/q/l/?s='+syms+'&f=sd2t2c&h&e=csv';
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('stooq ' + res.status);
+  const text = await res.text();
+  const lines = text.trim().split('\n').slice(1);
+  const out = {};
+  lines.forEach(line=>{
+    const parts = line.split(',');
+    if(parts.length < 4) return;
+    const sym = parts[0].toUpperCase().replace('.US','');
+    const price = parseFloat(parts[3]);
+    if(!isNaN(price) && price>0) out[sym] = price;
+  });
+  return out;
+}
+
+async function fetchBTCPrice(){
+  const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl');
+  if(!res.ok) throw new Error('coingecko ' + res.status);
+  const json = await res.json();
+  return json.bitcoin.brl;
+}
+
+async function fetchUSDBRL(){
+  const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
+  if(!res.ok) throw new Error('frankfurter ' + res.status);
+  const json = await res.json();
+  return json.rates.BRL;
+}
+
+async function saveCache(){
+  try{ await window.storage.set(CACHE_KEY, JSON.stringify(LIVE), false); }catch(e){ /* ignora falha de cache */ }
+}
+async function loadCache(){
+  try{
+    const r = await window.storage.get(CACHE_KEY, false);
+    if(r && r.value) return JSON.parse(r.value);
+  }catch(e){ /* sem cache ainda */ }
+  return null;
+}
+
+async function loadLivePrices(force){
+  const statusEl = document.getElementById('quoteStatus');
+  statusEl.textContent = 'Tentando buscar cotações automaticamente…';
+
+  if(!force){
+    const cached = await loadCache();
+    if(cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < CACHE_MAX_AGE_MS){
+      LIVE = cached;
+      finishLoad(true);
+      return;
+    }
+  }
+
+  const results = await Promise.allSettled([fetchBRPrices(), fetchUSPrices(), fetchBTCPrice(), fetchUSDBRL()]);
+  let anyOk = false;
+  if(results[0].status==='fulfilled'){ LIVE.br = results[0].value; anyOk = true; }
+  if(results[1].status==='fulfilled'){ LIVE.us = results[1].value; anyOk = true; }
+  if(results[2].status==='fulfilled'){ LIVE.btc = results[2].value; anyOk = true; }
+  if(results[3].status==='fulfilled'){ LIVE.usdbrl = results[3].value; anyOk = true; }
+  LIVE.fetchedAt = Date.now();
+  LIVE.ok = anyOk;
+  await saveCache();
+  finishLoad(anyOk);
+}
+
+function finishLoad(ok){
+  const statusEl = document.getElementById('quoteStatus');
+  const hora = new Date(LIVE.fetchedAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const nBR = Object.keys(LIVE.br||{}).length, nUS = Object.keys(LIVE.us||{}).length;
+  const partes = [];
+  if(nBR>0) partes.push(nBR+'/8 B3');
+  if(nUS>0) partes.push(nUS+'/6 EUA');
+  if(LIVE.btc) partes.push('BTC');
+  if(LIVE.usdbrl) partes.push('câmbio');
+  statusEl.innerHTML = ok
+    ? `Busca automática às ${hora} · ${partes.join(' · ')} · <span class="manual-link" id="openSheetLink">completar manualmente</span>`
+    : `Busca automática indisponível neste navegador. <span class="manual-link" id="openSheetLink">Preencher cotações manualmente →</span>`;
+  const link = document.getElementById('openSheetLink');
+  if(link) link.addEventListener('click', openSheet);
+  buildAll();
+}
+
+function fmtBRL(v, showCents=true){
+  const n = Number(v)||0;
+  const opts = showCents ? {minimumFractionDigits:2, maximumFractionDigits:2} : {maximumFractionDigits:0};
+  return 'R$ ' + n.toLocaleString('pt-BR', opts);
+}
+function fmtUSD(v){
+  const n = Number(v)||0;
+  return 'US$ ' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtNum(v, dec=0){
+  const n = Number(v)||0;
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+}
+function signClass(v){ return v >= 0 ? 'pos' : 'neg'; }
+function signPrefix(v){ return v >= 0 ? '+' : '−'; }
+
+function heroFigure(v){
+  const n = Number(v)||0;
+  const intPart = Math.trunc(n).toLocaleString('pt-BR');
+  const cents = Math.round((n - Math.trunc(n))*100).toString().padStart(2,'0');
+  return `R$ ${intPart}<span class="cents">,${cents}</span>`;
+}
+
+function buildAll(){
+  const D = PORTFOLIO_DATA;
+  const usdbrl = getPrice('usdbrl') || FX_APPROX;
+  const ANY = hasAnyPrice();
+
+  // ---- valores de mercado (ao vivo quando disponivel, custo como fallback) ----
+  let valorMercadoAcoes = 0, custoAcoesFiis = D.acoesFiis.custoTotal + D.acoesFiis.fmpEletrobras.ValorEstimadoAtual;
+  D.acoesFiis.posicoes.forEach(p=>{
+    const lp = getPrice('br', p.Ticker);
+    valorMercadoAcoes += lp ? lp*p.Quantidade : p.CustoTotal;
+  });
+  valorMercadoAcoes += D.acoesFiis.fmpEletrobras.ValorEstimadoAtual; // sem cotacao diaria, usa estimativa
+
+  let valorMercadoEtfsBRL = 0, custoEtfsBRL = D.etfs.custoTotalBRL;
+  D.etfs.posicoes.forEach(p=>{
+    const lp = getPrice('us', p.Ativo);
+    valorMercadoEtfsBRL += lp ? lp*p.Quantidade*usdbrl : p.CustoBRL;
+  });
+
+  const custoBTC = D.bitcoin.custoTotalBRL;
+  const btcPrice = getPrice('btc');
+  const valorMercadoBTC = btcPrice ? btcPrice*D.bitcoin.quantidade : custoBTC;
+
+  const saldoRendaFixa = D.rendaFixa.totalSaldoAtual + D.rendaFixa.previdencia.SaldoAtual;
+
+  const totalDividendosAcoes = D.acoesFiis.totalDividendos;
+  const totalDividendosEtfsBRL = D.etfs.totalDividendosUSD * usdbrl;
+  const totalLucroRealizado = D.acoesFiis.totalLucroRealizado;
+
+  const patrimonioCusto = custoAcoesFiis + custoEtfsBRL + custoBTC + saldoRendaFixa;
+  const patrimonioMercado = valorMercadoAcoes + valorMercadoEtfsBRL + valorMercadoBTC + saldoRendaFixa;
+  const retornoConcretizado = totalDividendosAcoes + totalDividendosEtfsBRL + totalLucroRealizado;
+  const ganhoNaoRealizado = (valorMercadoAcoes - custoAcoesFiis) + (valorMercadoEtfsBRL - custoEtfsBRL) + (valorMercadoBTC - custoBTC);
+
+  document.getElementById('heroEyebrow').textContent = ANY ? 'Patrimônio total (mercado)' : 'Patrimônio alocado (custo — sem cotação ainda)';
+  document.getElementById('heroTotal').innerHTML = heroFigure(patrimonioMercado);
+  const retTotalPct = patrimonioCusto ? (ganhoNaoRealizado/ (custoAcoesFiis+custoEtfsBRL+custoBTC) *100) : 0;
+  document.getElementById('heroReturn').innerHTML = ANY
+    ? `<span class="${signClass(ganhoNaoRealizado)}">${signPrefix(ganhoNaoRealizado)} ${fmtBRL(Math.abs(ganhoNaoRealizado))} (${retTotalPct.toFixed(1)}%) não realizado</span>`
+    : '';
+
+  document.getElementById('heroSub').innerHTML = `
+    <div class="item"><span class="k">Ações &amp; FIIs</span><span class="v num">${fmtBRL(valorMercadoAcoes,false)}</span></div>
+    <div class="item"><span class="k">ETFs (EUA)</span><span class="v num">${fmtBRL(valorMercadoEtfsBRL,false)}</span></div>
+    <div class="item"><span class="k">Bitcoin</span><span class="v num">${fmtBRL(valorMercadoBTC,false)}</span></div>
+    <div class="item"><span class="k">Renda fixa</span><span class="v num">${fmtBRL(saldoRendaFixa,false)}</span></div>
+  `;
+
+  // ---------- PANEL GERAL ----------
+  const totalNaoRealizado = ganhoNaoRealizado;
+  const totalGeral = retornoConcretizado + totalNaoRealizado;
+  const panelGeral = document.getElementById('panel-geral');
+  panelGeral.innerHTML = `
+    <div class="block-title">Retorno total</div>
+    <div class="block-sub">Concretizado (vendas + dividendos) + valorização não realizada das posições ativas.</div>
+    <div class="card">
+      <div class="row-line"><span class="k">Lucro em posições encerradas</span><span class="num ${signClass(totalLucroRealizado)}">${signPrefix(totalLucroRealizado)} ${fmtBRL(Math.abs(totalLucroRealizado))}</span></div>
+      <div class="row-line"><span class="k">Dividendos &amp; JCP — ações/FIIs</span><span class="num pos">+ ${fmtBRL(totalDividendosAcoes)}</span></div>
+      <div class="row-line"><span class="k">Dividendos — ETFs (≈BRL)</span><span class="num pos">+ ${fmtBRL(totalDividendosEtfsBRL)} <span style="color:var(--paper-dim)">(${fmtUSD(D.etfs.totalDividendosUSD)})</span></span></div>
+      <div class="row-line" style="border-top:1px solid var(--rule-soft); margin-top:4px; padding-top:8px;"><span class="k">Valorização não realizada ${ANY?'':'<span class="live-tag">custo</span>'}</span><span class="num ${signClass(totalNaoRealizado)}">${signPrefix(totalNaoRealizado)} ${fmtBRL(Math.abs(totalNaoRealizado))}</span></div>
+      <div class="row-line" style="border-top:1px solid var(--rule); margin-top:6px; padding-top:10px; font-weight:600;"><span>Total</span><span class="num ${signClass(totalGeral)}">${signPrefix(totalGeral)} ${fmtBRL(Math.abs(totalGeral))}</span></div>
+    </div>
+
+    <div class="divider-label">Composição do patrimônio ${ANY?'(valor de mercado)':'(custo — sem cotação ainda)'}</div>
+    <div class="ledger">
+      ${geralRow('Ações & FIIs (B3)', valorMercadoAcoes, patrimonioMercado)}
+      ${geralRow('ETFs internacionais', valorMercadoEtfsBRL, patrimonioMercado)}
+      ${geralRow('Bitcoin', valorMercadoBTC, patrimonioMercado)}
+      ${geralRow('Renda fixa', saldoRendaFixa, patrimonioMercado)}
+      <div class="row total">
+        <div class="left"><span class="tkr">Total</span></div>
+        <div class="right"><span class="amt num">${fmtBRL(patrimonioMercado)}</span></div>
+      </div>
+    </div>
+    <div class="note">Renda fixa mostra o saldo bruto do seu último extrato — não tem cotação de mercado diária como ações. FMP-FGTS Eletrobrás usa a rentabilidade mensal mais recente divulgada pela XP.</div>
+  `;
+
+  // ---------- PANEL AÇÕES ----------
+  const acoesRows = D.acoesFiis.posicoes.map(p => {
+    const divInfo = D.acoesFiis.dividendos.find(d => d.Ticker === p.Ticker);
+    const divVal = divInfo ? divInfo.ValorRecebido : 0;
+    const lp = getPrice('br', p.Ticker);
+    const valorAtual = lp ? lp*p.Quantidade : p.CustoTotal;
+    const ganhoPreco = valorAtual - p.CustoTotal;
+    const retPrecoPct = p.CustoTotal ? (ganhoPreco/p.CustoTotal*100) : 0;
+    const ganhoTotal = ganhoPreco + divVal;
+    const retTotalPct = p.CustoTotal ? (ganhoTotal/p.CustoTotal*100) : 0;
+    const ganhoShown = RETURN_MODE==='total' ? ganhoTotal : ganhoPreco;
+    const retPctShown = RETURN_MODE==='total' ? retTotalPct : retPrecoPct;
+    return `<div class="row">
+      <div class="left"><div class="tkr">${p.Ticker}${lp?('<span class="live-tag on">'+(priceIsLive('br',p.Ticker)?'live':'manual')+'</span>'):''}</div><div class="desc">${fmtNum(p.Quantidade)} cotas · PM ${fmtBRL(p['PreçoMédio'])}${lp?' · agora '+fmtBRL(lp):''}</div></div>
+      <div class="right"><div class="amt num">${fmtBRL(valorAtual)}</div><div class="amt2 num ${signClass(ganhoShown)}">${signPrefix(ganhoShown)} ${fmtBRL(Math.abs(ganhoShown))} (${retPctShown.toFixed(1)}%)</div></div>
+    </div>`;
+  }).join('');
+
+  const fmp = D.acoesFiis.fmpEletrobras;
+  const fmpGanho = fmp.ValorEstimadoAtual - fmp.ValorAportado;
+  const fmpRow = `<div class="row">
+    <div class="left"><div class="tkr">FMP-FGTS Eletrobrás</div><div class="desc">Cota XP · aporte único ${fmp.DataAporte.split('-').reverse().join('/')}</div></div>
+    <div class="right"><div class="amt num">${fmtBRL(fmp.ValorEstimadoAtual)}</div><div class="amt2 pos">+${fmtBRL(fmpGanho)} (${fmp['RetornoAcumulado_%'].toFixed(1)}%)</div></div>
+  </div>`;
+
+  const realizadoRows = D.acoesFiis.lucroRealizado
+    .sort((a,b)=> b.LucroRealizado - a.LucroRealizado)
+    .map(r => `<div class="row">
+      <div class="left"><div class="tkr">${r.Ticker}</div><div class="desc">custo vendido ${fmtBRL(r.CustoVendido,false)}</div></div>
+      <div class="right"><div class="amt num ${signClass(r.LucroRealizado)}">${signPrefix(r.LucroRealizado)} ${fmtBRL(Math.abs(r.LucroRealizado))}</div></div>
+    </div>`).join('');
+
+  const divRows = D.acoesFiis.dividendos
+    .sort((a,b)=> b.ValorRecebido - a.ValorRecebido)
+    .map(r => `<div class="row">
+      <div class="left"><div class="tkr">${r.Ticker}</div></div>
+      <div class="right"><div class="amt num pos">+${fmtBRL(r.ValorRecebido)}</div></div>
+    </div>`).join('');
+
+  document.getElementById('panel-acoes').innerHTML = `
+    <div class="block-title">Posições ativas</div>
+    <div class="block-sub">${D.acoesFiis.posicoes.length + 1} ativos · custo total ${fmtBRL(custoAcoesFiis)}${ANY?' · valor de mercado '+fmtBRL(valorMercadoAcoes):''}</div>
+    <div class="toggle-return" id="toggleAcoes">
+      <button data-mode="price" class="${RETURN_MODE==='price'?'active':''}">Só preço</button>
+      <button data-mode="total" class="${RETURN_MODE==='total'?'active':''}">Total return</button>
+    </div>
+    <div class="ledger">${acoesRows}${fmpRow}</div>
+
+    <div class="divider-label">Posições encerradas — lucro/prejuízo realizado</div>
+    <div class="block-sub">${D.acoesFiis.lucroRealizado.length} tickers vendidos (parcial ou total) · custo vendido ${fmtBRL(D.acoesFiis.totalCustoVendido,false)}</div>
+    <details class="tickerlist">
+      <summary>Ver todos <span class="chev">▾</span></summary>
+      <div class="ledger">${realizadoRows}
+        <div class="row total"><div class="left"><span class="tkr">Total realizado</span></div><div class="right"><span class="amt num ${signClass(totalLucroRealizado)}">${signPrefix(totalLucroRealizado)} ${fmtBRL(Math.abs(totalLucroRealizado))}</span></div></div>
+      </div>
+    </details>
+
+    <div class="divider-label">Dividendos &amp; JCP recebidos por ativo</div>
+    <div class="block-sub">Inclui ativos já vendidos · total ${fmtBRL(totalDividendosAcoes)}</div>
+    <details class="tickerlist">
+      <summary>Ver todos <span class="chev">▾</span></summary>
+      <div class="ledger">${divRows}</div>
+    </details>
+  `;
+
+  // ---------- PANEL ETFS ----------
+  const etfRows = D.etfs.posicoes.map(p => {
+    const divInfo = D.etfs.dividendos.find(d => d.Ativo === p.Ativo);
+    const divValUSD = divInfo ? divInfo.USD_recebido : 0;
+    const lp = getPrice('us', p.Ativo);
+    const valorAtualUSD = lp ? lp*p.Quantidade : p.CustoUSD;
+    const valorAtualBRL = lp ? valorAtualUSD*usdbrl : p.CustoBRL;
+    const ganhoPrecoUSD = valorAtualUSD - p.CustoUSD;
+    const retPrecoPct = p.CustoUSD ? (ganhoPrecoUSD/p.CustoUSD*100) : 0;
+    const ganhoTotalUSD = ganhoPrecoUSD + divValUSD;
+    const retTotalPct = p.CustoUSD ? (ganhoTotalUSD/p.CustoUSD*100) : 0;
+    const ganhoShownUSD = RETURN_MODE==='total' ? ganhoTotalUSD : ganhoPrecoUSD;
+    const retPctShown = RETURN_MODE==='total' ? retTotalPct : retPrecoPct;
+    return `<div class="row">
+      <div class="left"><div class="tkr">${p.Ativo}${lp?('<span class="live-tag on">'+(priceIsLive('us',p.Ativo)?'live':'manual')+'</span>'):''}</div><div class="desc">${p.Quantidade.toFixed(3)} cotas · PM ${fmtUSD(p.PreçoMedioUSD)}${lp?' · agora '+fmtUSD(lp):''}</div></div>
+      <div class="right"><div class="amt num">${fmtBRL(valorAtualBRL)}</div><div class="amt2 num ${signClass(ganhoShownUSD)}">${signPrefix(ganhoShownUSD)} ${fmtUSD(Math.abs(ganhoShownUSD))} (${retPctShown.toFixed(1)}%)</div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('panel-etfs').innerHTML = `
+    <div class="block-title">ETFs internacionais</div>
+    <div class="block-sub">Avenue · ${D.etfs.posicoes.length} ativos · custo ${fmtBRL(custoEtfsBRL)} (${fmtUSD(D.etfs.custoTotalUSD)})${ANY?' · mercado '+fmtBRL(valorMercadoEtfsBRL):''}</div>
+    <div class="toggle-return" id="toggleEtfs">
+      <button data-mode="price" class="${RETURN_MODE==='price'?'active':''}">Só preço</button>
+      <button data-mode="total" class="${RETURN_MODE==='total'?'active':''}">Total return</button>
+    </div>
+    <div class="ledger">${etfRows}
+      <div class="row total"><div class="left"><span class="tkr">Total dividendos</span></div><div class="right"><span class="amt num pos">+${fmtUSD(D.etfs.totalDividendosUSD)}</span></div></div>
+    </div>
+    <div class="note">Câmbio usado: ${getPrice('usdbrl')?('R$ '+usdbrl.toFixed(4)+(priceIsLive('usdbrl')?' (ao vivo)':' (manual)')):('R$ '+FX_APPROX.toFixed(2)+' (aproximado)')}. Dividendos de ETFs americanos sofrem retenção de 30% na fonte para não residentes — valores acima são <b>brutos</b>.</div>
+  `;
+
+  ['toggleAcoes','toggleEtfs'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('click', e=>{
+      const btn = e.target.closest('button');
+      if(!btn) return;
+      RETURN_MODE = btn.dataset.mode;
+      buildAll();
+    });
+  });
+
+  // ---------- PANEL CRIPTO ----------
+  const btcGanho = valorMercadoBTC - custoBTC;
+  const btcRetPct = custoBTC ? (btcGanho/custoBTC*100) : 0;
+  document.getElementById('panel-cripto').innerHTML = `
+    <div class="block-title">Bitcoin ${btcPrice?('<span class="live-tag on">'+(priceIsLive('btc')?'live':'manual')+'</span>'):''}</div>
+    <div class="block-sub">Binance · aportes desde 2020</div>
+    <div class="card">
+      <div class="row-line"><span class="k">Quantidade atual</span><span class="num">${D.bitcoin.quantidade} BTC</span></div>
+      <div class="row-line"><span class="k">Preço médio pago</span><span class="num">${fmtBRL(D.bitcoin.precoMedioBRL)} / BTC</span></div>
+      ${btcPrice?`<div class="row-line"><span class="k">Preço agora</span><span class="num">${fmtBRL(btcPrice)} / BTC</span></div>`:''}
+      <div class="row-line" style="border-top:1px solid var(--rule-soft); margin-top:6px; padding-top:10px;"><span class="k">Total investido</span><span class="num">${fmtBRL(custoBTC)}</span></div>
+      <div class="row-line"><span class="k">Valor ${btcPrice?'de mercado':'(sem cotação)'}</span><span class="num">${fmtBRL(valorMercadoBTC)}</span></div>
+      <div class="row-line"><span class="k">Retorno</span><span class="num ${signClass(btcGanho)}">${signPrefix(btcGanho)} ${fmtBRL(Math.abs(btcGanho))} (${btcRetPct.toFixed(1)}%)</span></div>
+    </div>
+    <div class="note">Preço médio pago = total enviado ÷ quantidade atual (método mais confiável do que estimar cotação de cada aporte individualmente). Bitcoin não paga dividendo, então preço e total return são a mesma coisa aqui.</div>
+  `;
+
+  // ---------- PANEL RENDA FIXA ----------
+  const titRows = D.rendaFixa.titulos.map(t => {
+    const rent = t['Saldo Bruto Atual'] && t['Valor Aplicado'] ? ((t['Saldo Bruto Atual']/t['Valor Aplicado'] - 1)*100) : 0;
+    return `<div class="row">
+      <div class="left"><div class="tkr">${t.Ativo}</div><div class="desc">${t.Emissor} · ${t.Taxa}</div></div>
+      <div class="right"><div class="amt num">${fmtBRL(t['Saldo Bruto Atual'])}</div><div class="amt2 num pos">+${rent.toFixed(1)}%</div></div>
+    </div>`;
+  }).join('');
+
+  const prev = D.rendaFixa.previdencia;
+  document.getElementById('panel-fixa').innerHTML = `
+    <div class="block-title">Títulos</div>
+    <div class="block-sub">Tesouro, LCA/LCI, Caixinha · saldo bruto ${fmtBRL(D.rendaFixa.totalSaldoAtual)}</div>
+    <div class="ledger">${titRows}</div>
+
+    <div class="divider-label">Previdência privada</div>
+    <div class="card">
+      <div class="row-line"><span class="k">${prev.Fundo}</span></div>
+      <div class="row-line"><span class="k">${prev.Tipo} · ${prev.Seguradora} · regime ${prev.RegimeTributacao.toLowerCase()}</span></div>
+      <div class="row-line" style="margin-top:8px;"><span class="k">Total aportado</span><span class="num">${fmtBRL(prev.TotalAportado)}</span></div>
+      <div class="row-line"><span class="k">Saldo atual</span><span class="num">${fmtBRL(prev.SaldoAtual)}</span></div>
+      <div class="row-line"><span class="k">Retorno</span><span class="num pos">+${((prev.SaldoAtual/prev.TotalAportado-1)*100).toFixed(1)}%</span></div>
+    </div>
+  `;
+}
+
+function geralRow(label, val, total){
+  const pct = total ? (val/total*100).toFixed(1) : '0.0';
+  return `<div class="row">
+    <div class="left"><span class="tkr" style="font-family:var(--font-sans); font-weight:500;">${label}</span></div>
+    <div class="right"><div class="amt num">${fmtBRL(val,false)}</div><div class="amt2">${pct}%</div></div>
+  </div>`;
+}
+
+// tabs
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-'+btn.dataset.panel).classList.add('active');
+  window.scrollTo({top:0, behavior:'instant'});
+});
+
+buildAll();
+loadManual().then(buildAll);
+loadLivePrices(false);
+</script>
+</body>
+</html>
